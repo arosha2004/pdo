@@ -1,0 +1,267 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  password  String
+  appRole   String   // "employee" | "manager" | "admin"
+  jobGroup  String   // "cashier", "support", "developer", "hr", etc.
+  branch    String?
+  department String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  policyAssignments      PolicyAssignment[]
+  policyAcknowledgements PolicyAcknowledgement[]
+  lessonAssignments      LessonAssignment[]
+  lessonProgress         LessonProgress[]
+  quizAssignments        QuizAssignment[]
+  quizAttempts           QuizAttempt[]
+  notifications          Notification[]
+  
+  reportedIncidents      Incident[] @relation("ReportedIncidents")
+  incidentHistories      IncidentHistory[]
+  internalNotes          IncidentInternalNote[]
+  uploadedAttachments    IncidentAttachment[]
+}
+
+model Policy {
+  id        String   @id @default(uuid())
+  title     String
+  category  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  versions  PolicyVersion[]
+}
+
+model PolicyVersion {
+  id            String   @id @default(uuid())
+  policyId      String
+  policy        Policy   @relation(fields: [policyId], references: [id])
+  versionNumber Int
+  status        String   // "draft" | "published" | "archived"
+  content       String
+  effectiveDate DateTime?
+  reviewDate    DateTime?
+  publishedAt   DateTime?
+  createdBy     String
+  
+  assignments      PolicyAssignment[]
+  acknowledgements PolicyAcknowledgement[]
+}
+
+model PolicyAssignment {
+  id              String   @id @default(uuid())
+  policyVersionId String
+  policyVersion   PolicyVersion @relation(fields: [policyVersionId], references: [id])
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id])
+  jobGroup        String?
+  deadline        DateTime?
+}
+
+model PolicyAcknowledgement {
+  id              String   @id @default(uuid())
+  policyVersionId String
+  policyVersion   PolicyVersion @relation(fields: [policyVersionId], references: [id])
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  acknowledgedAt  DateTime @default(now())
+
+  @@unique([userId, policyVersionId])
+}
+
+model Lesson {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  content     String   // JSON array of slides
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  assignments LessonAssignment[]
+  progress    LessonProgress[]
+}
+
+model LessonAssignment {
+  id          String   @id @default(uuid())
+  lessonId    String
+  lesson      Lesson   @relation(fields: [lessonId], references: [id])
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  jobGroup    String?
+  deadline    DateTime?
+}
+
+model LessonProgress {
+  id          String   @id @default(uuid())
+  lessonId    String
+  lesson      Lesson   @relation(fields: [lessonId], references: [id])
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  status      String   // "not_started" | "in_progress" | "completed"
+  progressData String  // JSON state
+
+  @@unique([userId, lessonId])
+}
+
+model Quiz {
+  id           String   @id @default(uuid())
+  title        String
+  passThreshold Float
+  attemptLimit Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  versions     QuizVersion[]
+}
+
+model QuizVersion {
+  id            String   @id @default(uuid())
+  quizId        String
+  quiz          Quiz     @relation(fields: [quizId], references: [id])
+  versionNumber Int
+  status        String   // "draft" | "published" | "archived"
+  publishedAt   DateTime?
+  
+  questions     Question[]
+  assignments   QuizAssignment[]
+  attempts      QuizAttempt[]
+}
+
+model Question {
+  id            String   @id @default(uuid())
+  quizVersionId String
+  quizVersion   QuizVersion @relation(fields: [quizVersionId], references: [id])
+  text          String
+  
+  options       Option[]
+}
+
+model Option {
+  id         String   @id @default(uuid())
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id])
+  text       String
+  isCorrect  Boolean
+}
+
+model QuizAssignment {
+  id            String   @id @default(uuid())
+  quizVersionId String
+  quizVersion   QuizVersion @relation(fields: [quizVersionId], references: [id])
+  userId        String?
+  user          User?    @relation(fields: [userId], references: [id])
+  jobGroup      String?
+  deadline      DateTime?
+  status        String   // "pending" | "passed" | "failed" | "needs_manager_followup"
+}
+
+model QuizAttempt {
+  id            String   @id @default(uuid())
+  quizVersionId String
+  quizVersion   QuizVersion @relation(fields: [quizVersionId], references: [id])
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  score         Float
+  passed        Boolean
+  answers       String   // JSON of selected options
+  createdAt     DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  type      String
+  title     String
+  message   String
+  link      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model EmailOutbox {
+  id            String   @id @default(uuid())
+  to            String
+  subject       String
+  body          String
+  status        String   // "pending" | "sent" | "failed"
+  attempts      Int      @default(0)
+  nextAttemptAt DateTime?
+  dedupeKey     String   @unique
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model AuditEvent {
+  id         String   @id @default(uuid())
+  actorId    String
+  action     String
+  entityType String
+  entityId   String
+  metadata   String?  // JSON
+  createdAt  DateTime @default(now())
+}
+
+model Incident {
+  id              String   @id @default(uuid())
+  category        String
+  occurrenceTime  DateTime
+  description     String
+  status          String   @default("Open") // "Open" | "Under Review" | "Resolved"
+  resolutionNotes String?
+  
+  reporterId      String
+  reporter        User     @relation("ReportedIncidents", fields: [reporterId], references: [id])
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  history         IncidentHistory[]
+  internalNotes   IncidentInternalNote[]
+  attachments     IncidentAttachment[]
+}
+
+model IncidentHistory {
+  id          String   @id @default(uuid())
+  incidentId  String
+  incident    Incident @relation(fields: [incidentId], references: [id])
+  status      String
+  actorId     String
+  actor       User     @relation(fields: [actorId], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+model IncidentInternalNote {
+  id          String   @id @default(uuid())
+  incidentId  String
+  incident    Incident @relation(fields: [incidentId], references: [id])
+  authorId    String
+  author      User     @relation(fields: [authorId], references: [id])
+  note        String
+  createdAt   DateTime @default(now())
+}
+
+model IncidentAttachment {
+  id           String   @id @default(uuid())
+  incidentId   String
+  incident     Incident @relation(fields: [incidentId], references: [id])
+  filename     String
+  originalName String
+  mimeType     String
+  size         Int
+  uploadedById String
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+  createdAt    DateTime @default(now())
+}
