@@ -11,6 +11,7 @@ router.get('/aup', policiesController.getAUP);
 router.get('/:id', policiesController.getPolicyDetails);
 
 // Manager/Admin only
+router.post('/generate', requireRole('manager', 'admin'), policiesController.generatePolicy);
 router.post('/', requireRole('manager', 'admin'), policiesController.createDraft);
 router.put('/versions/:versionId', requireRole('manager', 'admin'), policiesController.editVersion);
 router.post('/versions/:versionId/publish', requireRole('manager', 'admin'), policiesController.publishAndAssign);

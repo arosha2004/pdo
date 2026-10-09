@@ -8,12 +8,43 @@ export default function PolicyForm() {
   const [category, setCategory] = useState('');
   const [content, setContent] = useState('');
   const [effectiveDate, setEffectiveDate] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
   const navigate = useNavigate();
+
+  const handleGenerateAI = async () => {
+    if (!title || !category) {
+      alert("Please enter a Title and select a Category before generating with AI.");
+      return;
+    }
+    setIsGenerating(true);
+    try {
+      const res = await fetch('http://localhost:3000/api/policies/generate', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ title, category })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setContent(data.content);
+      } else {
+        const err = await res.json();
+        alert(err.error?.message || 'Failed to generate');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Network error during generation');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch('http://localhost:3000/api/policies/drafts', {
+      const res = await fetch('http://localhost:3000/api/policies', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -77,7 +108,12 @@ export default function PolicyForm() {
             />
           </div>
           <div>
-            <label className="block mb-2 font-medium">Content</label>
+            <div className="flex justify-between items-center mb-2">
+              <label className="font-medium">Content</label>
+              <Button type="button" variant="secondary" onClick={handleGenerateAI} disabled={isGenerating}>
+                {isGenerating ? 'Generating...' : '✨ Auto-Generate with AI'}
+              </Button>
+            </div>
             <textarea 
               className="input-field" 
               rows="10" 

@@ -1,4 +1,5 @@
 const policiesService = require('../services/policiesService');
+const { GoogleGenAI } = require('@google/genai');
 
 const getLibrary = async (req, res) => {
   try {
@@ -33,6 +34,37 @@ const createDraft = async (req, res) => {
   try {
     const policy = await policiesService.createDraft(req.body, req.user);
     res.status(201).json(policy);
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+const generatePolicy = async (req, res) => {
+  try {
+    const { title, category } = req.body;
+    if (!title || !category) {
+      return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'Title and category are required to generate a policy' } });
+    }
+    
+    // We will use a mock string if API key is not present for dev purposes, 
+    // or actually call the API if it is.
+    if (!process.env.GEMINI_API_KEY) {
+      const mockContent = `PURPOSE\nTo establish guidelines for ${title}.\n\nSCOPE\nApplies to all employees regarding ${category}.\n\nPOLICY STATEMENT\nEmployees must adhere to the standards outlined in this document.`;
+      return res.json({ content: mockContent });
+    }
+
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const prompt = `Write a professional corporate policy document. 
+Title: ${title}
+Category: ${category}
+The policy should include sections for Purpose, Scope, Policy Statement, and Responsibilities. Do not include markdown code block syntax like \`\`\` in the output.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+    });
+    
+    res.json({ content: response.text });
   } catch (err) {
     res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
   }
@@ -83,6 +115,7 @@ module.exports = {
   getAUP,
   getPolicyDetails,
   createDraft,
+  generatePolicy,
   editVersion,
   publishAndAssign,
   archive,
